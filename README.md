@@ -19,8 +19,8 @@ Since you have your key, you can use simple_test.rb to process at your simple te
 
 step 3: test it in console
 --------------------------
-  sudo gem install 'httparty'
-  ruby simple_test.rb
+    sudo gem install 'httparty'
+    ruby simple_test.rb
 
 step 4: check result
 --------------------
