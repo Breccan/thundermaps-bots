@@ -40,7 +40,7 @@ class Record
 		stm.bind_param "occurred_on", @occurred_on.to_s
 		stm.bind_param "latitude", @latitude
 		stm.bind_param "longitude", @longitude
-		stm.bind_param "description", @description
+		stm.bind_param "description", escape( @description )
 		stm.bind_param "source_id", @source_id
 		rs = stm.execute
 
@@ -60,10 +60,14 @@ class Record
 		@ID.nil?
 	end
 	
+	def escape s
+		s.gsub(/\\/, '\&\&').gsub(/'/, "''").gsub(/"/, '""')
+	end
+	
 	def save
 		if is_not_exist_in_history?
 			# create
-			@@db.execute "INSERT INTO #{TABLE_NAME} ( ID, library_name, category_name, occurred_on, latitude, longitude, description, source_id ) VALUES( (SELECT max(ID) FROM #{TABLE_NAME})+1, '#{@library_name}', '#{@category_name}', '#{@occurred_on}', '#{@latitude}', '#{@longitude}', '#{@description}', '#{@source_id}' )"
+			@@db.execute "INSERT INTO #{TABLE_NAME} ( ID, library_name, category_name, occurred_on, latitude, longitude, description, source_id ) VALUES( (SELECT max(ID) FROM #{TABLE_NAME})+1, '#{@library_name}', '#{@category_name}', '#{@occurred_on}', '#{@latitude}', '#{@longitude}', '#{escape( description )}', '#{@source_id}' )"
 			@ID = @@db.last_insert_row_id
 		else
 			# update
@@ -96,12 +100,10 @@ class FoodUKThunderBot
   
   def read( xml )
 	xml[ "EstablishmentCollection" ][ "EstablishmentDetail" ].each_with_index  do | e, index |
-
-		
 		latitude = e[ "Geocode" ][ "Latitude" ]
 		longitude = e[ "Geocode" ][ "Longitude" ]
-		#library_name = "food-uk-test"
-		library_name = "test"
+		library_name = "food-uk-test"
+		#library_name = "test"
 		
 		begin
 			a_date = e[ "RatingDate" ].split( '-' )
@@ -109,20 +111,20 @@ class FoodUKThunderBot
 		rescue
 			occurred_on = DateTime.now
 		end
-		
+		business_name = e[ "BusinessName" ]
 		case e[ "RatingValue" ].downcase
 		when "awaitingpublication"
 			category_name = "awaiting publication"
-			description = e[ "BusinessName" ] + " is awaiting publication to be rate"
+			description = business_name + " is awaiting publication to be rate"
 		when "awaitinginspection"
 			category_name = "awaiting inspection"
-			description = e[ "BusinessName" ] + " is awaiting inspection to be rate"
+			description = business_name + " is awaiting inspection to be rate"
 		when "exempt"
 			category_name = "exempt"
-			description = e[ "BusinessName" ] + " is exempt"
+			description = business_name + " is exempt"
 		else
 			category_name = "noted"
-			description = "Rating of " + e[ "BusinessName" ] + " is " + e[ "RatingValue" ]
+			description = "Rating of " + business_name + " is " + e[ "RatingValue" ]
 		end
 		
 		source_id = "http://ratings.food.gov.uk/"
