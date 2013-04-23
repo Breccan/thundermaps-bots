@@ -2,43 +2,76 @@ require 'pp'
 require 'json'
 require 'httparty'
 require 'xmlsimple'
+require 'sqlite3'
+
+DATABASE_NAME = "history.db"
 
 class Record
-	attr_accessor :library_name, :category_name, :date, :latitude, :longitude, :description, :source_id, :ID
+	attr_accessor :library_name, :category_name, :occurred_on, :latitude, :longitude, :description, :source_id, :ID
 	
-	def initialize( library_name, category_name, date, latitude, longitude, description, source_id )
+	@@db = nil
+	
+	TABLE_NAME = "Records"
+	
+	def self.set_db db
+		@@db = db
+	end
+	
+	def initialize( library_name, category_name, occurred_on, latitude, longitude, description, source_id )
 		@library_name = library_name
 		@category_name = category_name
-		@date = date
+		@occurred_on = occurred_on
 		@latitude = latitude
 		@longitude = longitude
 		@description = description
 		@source_id = source_id
+		
+		sync_with_history
+	end
+	
+	def sync_with_history
+		stm = @@db.prepare "SELECT ID FROM #{TABLE_NAME} WHERE library_name = :library_name AND category_name= :category_name AND occurred_on= :occurred_on AND latitude= :latitude AND longitude= :longitude AND description=:description AND source_id= :source_id"
+		stm.bind_param "library_name", @library_name
+		stm.bind_param "category_name", @category_name
+		stm.bind_param "occurred_on", @occurred_on.to_s
+		stm.bind_param "latitude", @latitude
+		stm.bind_param "longitude", @longitude
+		stm.bind_param "description", @description
+		stm.bind_param "source_id", @source_id
+		rs = stm.execute
+
+		row = rs.next
+		
+		if row
+			puts 'already broadcasted'
+			@ID = row["ID"]
+		else
+			puts 'looks as new record'
+			@ID = nil
+		end
+		stm.close
+	end
+	
+	def is_not_exist_in_history?
+		@ID.nil?
 	end
 	
 	def save
-		if @Id
-			# update
-		else
+		if is_not_exist_in_history?
 			# create
+			@@db.execute "INSERT INTO #{TABLE_NAME} ( ID, library_name, category_name, occurred_on, latitude, longitude, description, source_id ) VALUES( (SELECT max(ID) FROM #{TABLE_NAME})+1, '#{@library_name}', '#{@category_name}', '#{@occurred_on}', '#{@latitude}', '#{@longitude}', '#{@description}', '#{@source_id}' )"
+			@ID = @@db.last_insert_row_id
+		else
+			# update
+			puts 'no make sense to update'
 		end
-	end
-	
-	def is_eq? record
-		@library_name == record.library_name and
-		@category_name == record.category_name and
-		@date == record.date and
-		@latitude == record.latitude and
-		@longitude == record.longitude and
-		@description == record.description and
-		@source_id == record.source_id
 	end
 	
 	def to_json
 		{
 		  latitude: @latitude,
 		  longitude: @longitude,
-		  occurred_on: @date.to_s,
+		  occurred_on: @occurred_on.to_s,
 		  description: @description,
 		  category_name: @category_name,
 		  source_id: @source_id
@@ -58,13 +91,14 @@ class FoodUKThunderBot
   end
   
   def read( xml )
-	xml[ "EstablishmentCollection" ][ "EstablishmentDetail" ].each  do | e |
+	xml[ "EstablishmentCollection" ][ "EstablishmentDetail" ].each_with_index  do | e, index |
 
 		a_date = e[ "RatingDate" ].split( '-' )
-		date = DateTime.new( a_date[0].to_i, a_date[1].to_i, a_date[2].to_i )
+		occurred_on = DateTime.new( a_date[0].to_i, a_date[1].to_i, a_date[2].to_i )
 		latitude = e[ "Geocode" ][ "Latitude" ]
 		longitude = e[ "Geocode" ][ "Longitude" ]
-		library_name = "Food UK - test"
+		#library_name = "food-uk-test"
+		library_name = "test"
 		
 		case e[ "RatingValue" ]
 		when "awaitingpublication"
@@ -83,33 +117,45 @@ class FoodUKThunderBot
 		
 		source_id = "http://ratings.food.gov.uk/"
 		
-		publish( library_name, category_name, date, latitude, longitude, description, source_id )
-		break
+		publish( Record.new( library_name, category_name, occurred_on, latitude, longitude, description, source_id ) )
+		break if index == 3
 	end
 	
   end
   
-  def publish( library_name, category_name, date, latitude, longitude, description, source_id )
-	api_call = "http://app.thundermaps.com/api/incident_reports/?library=#{library_name}&key=#{@key}"
-	reports = [
-			    {
-			      latitude: latitude,
-                  longitude: longitude,
-			      occurred_on: date.to_s,
-			      description: description,
-			      category_name: category_name,
-			      source_id: source_id
-			    } ]
-	pp reports
-	HTTParty.post( api_call, 
-		:body => { :reports => reports }.to_json,
-		:headers => { 'Content-Type' => 'application/json' }
-	)
-	
-	
-
+  def publish( record )
+	if record.is_not_exist_in_history?
+		api_call = "http://app.thundermaps.com/api/incident_reports/?library=#{record.library_name}&key=#{@key}"
+		reports = [
+					{
+					  latitude: record.latitude,
+					  longitude: record.longitude,
+					  occurred_on: record.occurred_on.to_s,
+					  description: record.description,
+					  category_name: record.category_name,
+					  source_id: record.source_id
+					} ]
+		pp reports
+		pp HTTParty.post( api_call, 
+			:body => { :reports => reports }.to_json,
+			:headers => { 'Content-Type' => 'application/json' }
+		)
+		
+		record.save
+	end
   end
   
 end
-bot = FoodUKThunderBot.new
-bot.read(  XmlSimple.xml_in( 'FHRS413en-GB.xml', { 'ForceArray' => false } ) )
+
+begin
+	db = SQLite3::Database.open DATABASE_NAME
+	db.results_as_hash = true
+	Record.set_db db
+	bot = FoodUKThunderBot.new
+	bot.read(  XmlSimple.xml_in( 'FHRS413en-GB.xml', { 'ForceArray' => false } ) )
+rescue SQLite3::Exception => e     
+	puts "Exception occured with DATABASE #{DATABASE_NAME}"
+	puts e
+ensure
+	db.close if db
+end

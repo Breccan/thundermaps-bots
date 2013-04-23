@@ -21,7 +21,7 @@ pp HTTParty.post( api_call,
     :body => { :reports => [
 			    {
 			      latitude: wellington[ :latitude ],
-                              longitude: wellington[ :longitude ],
+                  longitude: wellington[ :longitude ],
 			      occurred_on: date.to_s,
 			      description: description,
 			      category_name: category_name,
