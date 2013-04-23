@@ -26,7 +26,6 @@ pp HTTParty.post( api_call,
 			      description: description,
 			      category_name: category_name,
 			      source_id: source_id
-			    }
-                           ]
+			    } ]
              }.to_json,
     :headers => { 'Content-Type' => 'application/json' } )
