@@ -124,7 +124,9 @@ class FoodUKThunderBot
 			description = business_name + " is exempt"
 		else
 			category_name = "noted"
-			description = "Rating of " + business_name + " is " + e[ "RatingValue" ]
+			description = "In the local authority of " + e["LocalAuthorityName"] + " the " + e[ "BusinessType" ] + " called " + e[ "BusinessName" ] +
+			"received the following scores: Hygiene: " + e["Hygiene"] + ", Structural: " + e["Structural"] + ", Confidence in management "
+			+ e [ "ConfidenceInManagement" ] + ". To find out more about what this means go here: http://ratings.food.gov.uk/"
 		end
 		
 		source_id = "http://ratings.food.gov.uk/"
@@ -196,5 +198,5 @@ rescue SQLite3::Exception => e
 	MyLogger.logger.fatal "Exception occured with DATABASE #{DATABASE_NAME}"
 	MyLogger.logger.fatal
 ensure
-	#db.close if db
+	db.close if db
 end
