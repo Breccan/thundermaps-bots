@@ -2,7 +2,6 @@ require 'pp'
 require 'json'
 require 'httparty'
 require 'xmlsimple'
-require 'sqlite3'
 require 'net/http'
 require 'date'
 require 'logger'
@@ -76,7 +75,7 @@ class FoodUKThunderBot
       category_name = "noted"
       description = "In the local authority of " + e["LocalAuthorityName"] + " the " + e[ "BusinessType" ] + " called " + e[ "BusinessName" ] +
         "received the following scores: Hygiene: " + e["Hygiene"] + ", Structural: " + e["Structural"] + ", Confidence in management "
-      + e [ "ConfidenceInManagement" ] + ". To find out more about what this means go here: http://ratings.food.gov.uk/"
+      + e [ "ConfidenceInManagement" ] + ". To find out more see: http://ratings.food.gov.uk/"
     end
 
     source_id = e["FHRSID"]
